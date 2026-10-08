@@ -729,8 +729,12 @@ function narrFrom(s) {
   return "성우";
 }
 function fromSheetCSV(text) {
-  const rows = parseCSV(text); if (rows.length < 2) throw new Error("CSV에 데이터가 없습니다");
-  const head = rows[0].map(h => h.trim());
+  let rows = parseCSV(text);
+  const hi = rows.slice(0, 15).findIndex(r => r.some(c => (c || "").trim() === "업체명"));
+  if (hi < 0) throw new Error("‘업체명’ 열을 찾을 수 없습니다. 프로젝트 목록이 있는 시트(탭)인지 확인하세요.");
+  rows = rows.slice(hi);
+  if (rows.length < 2) throw new Error("시트에 프로젝트 데이터가 없습니다");
+  const head = rows[0].map(h => (h || "").trim());
   const col = (...keys) => { for (const k of keys) { const i = head.indexOf(k); if (i >= 0) return i; } return -1; };
   const C = { program: col("지원사업명", "지원사업"), client: col("업체명"), purpose: col("목적"), title: col("내용"), technique: col("제작 기법", "제작기법"), outsource: col("외주"), pm: col("PM"), edit: col("편집"), td: col("3D"), design: col("디자인"), lang: col("언어"), narration: col("내레이션", "나레이션"), status: col("상태"), done: col("완료", "완료일"), first: col("1차", "1차 시안일"), note: col("비고"), amount: col("제작 금액", "제작금액") };
   if (C.client < 0) throw new Error("‘업체명’ 열을 찾을 수 없습니다. 구글시트 원본 CSV인지 확인하세요.");
@@ -780,18 +784,63 @@ function fromJSON(text) {
 }
 
 let pendingImport = null;
+function importMsg(text, kind) { const el = $("importInfo"); el.textContent = text; el.className = kind || ""; }
+function setPending(data, name) {
+  if (!data.projects.length) throw new Error("가져올 프로젝트가 없습니다");
+  pendingImport = { data, name };
+  const active = data.projects.filter(p => p.status !== "done").length;
+  importMsg(name + " — 프로젝트 " + data.projects.length + "건 (진행 " + active + "), 금액 " + Object.keys(data.amounts).length + "건 확인. ‘가져오기 실행’을 누르세요.", "ok");
+  $("importBtn").disabled = false;
+}
+function decodeText(buf) {
+  const u = new TextDecoder("utf-8").decode(buf);
+  if (u.includes("\uFFFD") || !u.slice(0, 2000).includes("업체명")) {
+    try { const k = new TextDecoder("euc-kr").decode(buf); if (k.slice(0, 2000).includes("업체명")) return k; } catch (e) { }
+  }
+  return u;
+}
+async function xlsxToCSV(buf) {
+  const XLSX = await import("https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs");
+  const wb = XLSX.read(new Uint8Array(buf), { type: "array", cellDates: true, dateNF: "yyyy-mm-dd" });
+  const name = wb.SheetNames.find(n => XLSX.utils.sheet_to_csv(wb.Sheets[n]).includes("업체명")) || wb.SheetNames[0];
+  return XLSX.utils.sheet_to_csv(wb.Sheets[name], { rawNumbers: false });
+}
+function sheetCsvUrl(s) {
+  s = (s || "").trim();
+  const m = s.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]{20,})/) || s.match(/^([a-zA-Z0-9_-]{30,})$/);
+  if (!m) return null;
+  const gid = (s.match(/[#&?]gid=(\d+)/) || [])[1];
+  return "https://docs.google.com/spreadsheets/d/" + m[1] + "/export?format=csv" + (gid ? "&gid=" + gid : "");
+}
+try { $("sheetUrl").value = localStorage.getItem("gb-sheet-url") || ""; } catch (e) { }
+$("sheetBtn").addEventListener("click", async () => {
+  pendingImport = null; $("importBtn").disabled = true; $("importFile").value = "";
+  const url = sheetCsvUrl($("sheetUrl").value);
+  if (!url) { importMsg("구글시트 주소를 확인하세요. https://docs.google.com/spreadsheets/d/… 형태여야 합니다.", "err"); return; }
+  importMsg("구글시트를 불러오는 중…");
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    const text = r.ok ? await r.text() : "";
+    if (!r.ok || /^\s*<(!doctype|html)/i.test(text)) throw new Error("시트를 열 수 없습니다. 시트 공유 설정을 ‘링크가 있는 모든 사용자 · 뷰어’로 바꾼 뒤 다시 시도하세요.");
+    setPending(fromSheetCSV(text), "구글시트");
+    try { localStorage.setItem("gb-sheet-url", $("sheetUrl").value.trim()); } catch (e) { }
+  } catch (err) {
+    importMsg((err.message || String(err)).replace("Failed to fetch", "시트에 연결하지 못했습니다. 공유 설정(링크가 있는 모든 사용자)을 확인하세요."), "err");
+  }
+});
 $("importFile").addEventListener("change", async e => {
   const file = e.target.files[0]; pendingImport = null; $("importBtn").disabled = true;
   if (!file) return;
+  importMsg("파일을 읽는 중…");
   try {
-    const text = await file.text();
-    const data = /\.json$/i.test(file.name) || text.trim().startsWith("{") ? fromJSON(text) : fromSheetCSV(text);
-    if (!data.projects.length) throw new Error("가져올 프로젝트가 없습니다");
-    pendingImport = { data, name: file.name };
-    const active = data.projects.filter(p => p.status !== "done").length;
-    $("importInfo").textContent = file.name + " — 프로젝트 " + data.projects.length + "건 (진행 " + active + "), 금액 " + Object.keys(data.amounts).length + "건. ‘가져오기’를 누르면 현재 보드 내용이 이 파일로 교체됩니다.";
-    $("importBtn").disabled = false;
-  } catch (err) { $("importInfo").textContent = "파일을 읽지 못했습니다: " + err.message; }
+    const buf = await file.arrayBuffer();
+    const ext = (file.name.split(".").pop() || "").toLowerCase();
+    let data;
+    if (ext === "json") data = fromJSON(new TextDecoder("utf-8").decode(buf));
+    else if (ext === "xlsx" || ext === "xls") data = fromSheetCSV(await xlsxToCSV(buf));
+    else { const t = decodeText(buf); data = t.trim().startsWith("{") ? fromJSON(t) : fromSheetCSV(t); }
+    setPending(data, file.name);
+  } catch (err) { importMsg("파일을 읽지 못했습니다: " + (err.message || err), "err"); }
 });
 $("importBtn").addEventListener("click", async e => {
   if (!pendingImport) return;
@@ -819,8 +868,12 @@ $("importBtn").addEventListener("click", async e => {
     }
     await setDoc(doc(collection(db, base() + "/logs")), { at: serverTimestamp(), by: myEmail(), byName: by, action: "import", pid: "", label: name, changes: [data.projects.length + "건 가져오기 (금액 " + Object.keys(data.amounts).length + "건)"] });
     toast(data.projects.length + "건을 가져왔습니다");
-    pendingImport = null; $("importFile").value = ""; $("importInfo").textContent = "가져오기 완료.";
-  } catch (err) { toast("가져오기 실패: " + (err.code || err.message)); btn.disabled = false; }
+    pendingImport = null; $("importFile").value = ""; importMsg("가져오기 완료 — " + data.projects.length + "건이 보드에 반영되었습니다.", "ok");
+  } catch (err) {
+    btn.disabled = false;
+    const hint = err.code === "permission-denied" ? " — 저장 권한이 없습니다. 관리자 계정(" + OWNER + ")으로 로그인했는지 확인하세요." : "";
+    importMsg("가져오기 실패: " + (err.code || "") + " " + (err.message || "") + hint, "err");
+  }
 });
 
 function download(name, text, type) {

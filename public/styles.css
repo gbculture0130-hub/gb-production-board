@@ -277,3 +277,5 @@ button.log:hover{background:var(--surface2)}
 .chips button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);font-weight:600}
 .chips input{flex:1 1 140px;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
 .filebox input[type=file]{width:auto;flex:1 1 260px;background:transparent;border:0;padding:6px 0;color:var(--muted)}
+.filebox input[type=url]{flex:1 1 320px;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+#importInfo.err{color:var(--late)} #importInfo.ok{color:var(--ok)}

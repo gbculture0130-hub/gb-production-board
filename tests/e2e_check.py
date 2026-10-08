@@ -5,7 +5,7 @@ import json, re, sys, time
 from playwright.sync_api import sync_playwright, expect
 
 DATA, SHOTS = sys.argv[1], sys.argv[2]
-URL = "http://127.0.0.1:5050/"
+URL = "http://127.0.0.1:5050/?emu=1"
 OWNER = "gbculture12@gmail.com"
 results = []
 
