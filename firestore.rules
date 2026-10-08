@@ -1,0 +1,87 @@
+rules_version = '2';
+
+// GB 프로덕션 보드 보안 규칙
+// - 프로젝트 목록: 보드 링크(키)를 아는 사람은 로그인 없이 열람
+// - 추가·수정·삭제: 등록된 편집자(구글 로그인)만
+// - 제작 금액·변경 이력: 편집자만 열람
+// - 편집자 명단 관리: 관리자만
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function owner() { return 'gbculture12@gmail.com'; }
+    function signedIn() {
+      return request.auth != null
+        && request.auth.token.email is string
+        && request.auth.token.email_verified == true;
+    }
+    function myEmail() { return request.auth.token.email.lower(); }
+    function editorPath() { return /databases/$(database)/documents/editors/$(myEmail()); }
+    function isOwner() { return signedIn() && myEmail() == owner(); }
+    function isEditor() { return isOwner() || (signedIn() && exists(editorPath())); }
+    function isAdmin() {
+      return isOwner() || (signedIn() && exists(editorPath()) && get(editorPath()).data.role == 'admin');
+    }
+    function str(d, k, max) { return !(k in d) || (d[k] is string && d[k].size() <= max); }
+
+    function validProject() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['order', 'program', 'client', 'purpose', 'title', 'technique', 'outsource',
+                               'pm', 'edit', 'td', 'design', 'lang', 'narration',
+                               'status', 'done', 'doneText', 'first', 'firstText',
+                               'note', 'createdAt', 'updatedAt', 'updatedBy'])
+        && d.client is string && d.client.size() > 0 && d.client.size() <= 200
+        && d.status in ['todo', 'plan', 'shoot', 'prod', 'edit', 'revise', 'review', 'hold', 'done']
+        && str(d, 'title', 300) && str(d, 'program', 100) && str(d, 'purpose', 100)
+        && str(d, 'technique', 200) && str(d, 'outsource', 200)
+        && str(d, 'pm', 60) && str(d, 'edit', 60) && str(d, 'td', 60) && str(d, 'design', 60)
+        && str(d, 'done', 10) && str(d, 'doneText', 100) && str(d, 'first', 10) && str(d, 'firstText', 100)
+        && str(d, 'lang', 100)
+        && (!('narration' in d) || d.narration in ['', '성우', 'AI', '없음'])
+        && str(d, 'note', 3000) && str(d, 'updatedBy', 100)
+        && (!('order' in d) || d.order is number);
+    }
+    function validAmount() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['amount', 'vat', 'memo'])
+        && (!('amount' in d) || d.amount == null || d.amount is number)
+        && str(d, 'vat', 10) && str(d, 'memo', 300);
+    }
+
+    // 편집자 명단 (문서 ID = 소문자 이메일)
+    match /editors/{email} {
+      allow get: if signedIn() && myEmail() == email;
+      allow read: if isEditor();
+      allow create, update: if isAdmin() && email != owner()
+        && request.resource.data.keys().hasOnly(['email', 'name', 'role', 'addedAt', 'addedBy'])
+        && request.resource.data.email == email
+        && request.resource.data.role in ['editor', 'admin'];
+      allow delete: if isAdmin() && email != owner();
+    }
+
+    // 보드: 경로의 키를 아는 사람만 접근 (키는 공유 링크에만 있음)
+    match /boards/{board} {
+      // 보드 정보 문서: 키를 아는 사람만 조회 (목록 조회는 불가)
+      allow get: if true;
+      allow create, update: if isAdmin()
+        && request.resource.data.keys().hasOnly(['name', 'createdAt', 'createdBy']);
+
+      match /projects/{id} {
+        allow read: if true;
+        allow create, update: if isEditor() && validProject();
+        allow delete: if isEditor();
+      }
+      match /amounts/{id} {
+        allow read: if isEditor();
+        allow create, update: if isEditor() && validAmount();
+        allow delete: if isEditor();
+      }
+      match /logs/{id} {
+        allow read: if isEditor();
+        allow create: if isEditor()
+          && request.resource.data.by == myEmail()
+          && request.resource.data.at == request.time;
+        allow update, delete: if false;
+      }
+    }
+  }
+}

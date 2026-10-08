@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>GB 프로덕션 보드</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <div class="eyebrow"><span class="rec off" id="rec"></span><span id="sync">연결 중</span></div>
+      <h1>GB 프로덕션 보드</h1>
+    </div>
+    <div class="top-meta">
+      <span class="tc" id="today"></span>
+      <button class="btn primary" id="addBtn" type="button" hidden>+ 프로젝트 추가</button>
+      <span id="authBox"></span>
+    </div>
+  </header>
+
+  <div id="notice" class="notice" hidden></div>
+  <div id="gate" class="gate" hidden></div>
+
+  <main id="main" class="view" hidden>
+    <nav class="tabs" role="tablist">
+      <button type="button" role="tab" data-tab="board" aria-selected="true">전체 현황</button>
+      <button type="button" role="tab" data-tab="team" aria-selected="false">팀원별</button>
+      <button type="button" role="tab" data-tab="timeline" aria-selected="false">일정</button>
+      <button type="button" role="tab" data-tab="logs" aria-selected="false" hidden>변경 이력</button>
+      <button type="button" role="tab" data-tab="admin" aria-selected="false" hidden>관리</button>
+    </nav>
+
+    <!-- 전체 현황 -->
+    <section class="view" id="v-board">
+      <div class="kpis" aria-label="요약">
+        <div class="kpi"><span class="lab">진행 중</span><span class="val" id="k-active">–</span><span class="sub" id="k-active-sub">&nbsp;</span></div>
+        <div class="kpi warn"><span class="lab">14일 내 마감</span><span class="val" id="k-soon">–</span><span class="sub" id="k-soon-sub">&nbsp;</span></div>
+        <div class="kpi late"><span class="lab">마감 지남</span><span class="val" id="k-over">–</span><span class="sub" id="k-over-sub">&nbsp;</span></div>
+        <div class="kpi"><span class="lab" id="k-4-lab">이번 달 마감</span><span class="val" id="k-4">–</span><span class="sub" id="k-4-sub">&nbsp;</span></div>
+      </div>
+
+      <div class="panel" aria-label="제작 단계">
+        <div class="panel-head"><h2>제작 파이프라인</h2><span class="hint">단계를 누르면 해당 건만 보입니다</span></div>
+        <div class="stages" id="stages"></div>
+      </div>
+
+      <div class="toolbar" aria-label="필터">
+        <input class="search" id="q" type="search" placeholder="업체명 · 내용 · 담당자 · 비고 검색" autocomplete="off">
+        <div class="seg" id="scopeSeg" role="group" aria-label="범위">
+          <button type="button" data-v="active" aria-pressed="true">진행 중</button>
+          <button type="button" data-v="all" aria-pressed="false">전체</button>
+          <button type="button" data-v="done" aria-pressed="false">완료</button>
+        </div>
+        <select class="sel" id="progSel" aria-label="지원사업"><option value="">지원사업 전체</option></select>
+        <select class="sel" id="ownerSel" aria-label="담당자"><option value="">담당자 전체</option></select>
+      </div>
+
+      <div class="list" id="list" aria-live="polite"></div>
+      <div class="foot"><span id="countLine"></span><span>마감일 순 · 저장 즉시 모든 화면에 반영</span></div>
+    </section>
+
+    <!-- 팀원별 -->
+    <section class="view" id="v-team" hidden>
+      <div class="panel">
+        <div class="panel-head"><h2>팀원별 진행 건수</h2>
+          <div class="rolefilter" id="roleSeg">
+            <span class="hint">역할</span>
+            <div class="seg"><button type="button" data-v="" aria-pressed="true">전체</button><button type="button" data-v="pm" aria-pressed="false">PM</button><button type="button" data-v="edit" aria-pressed="false">편집</button><button type="button" data-v="td" aria-pressed="false">3D</button><button type="button" data-v="design" aria-pressed="false">디자인</button></div>
+          </div>
+        </div>
+        <div class="people" id="people"></div>
+      </div>
+      <div class="week" id="personWeek"></div>
+      <div class="list" id="personList"></div>
+    </section>
+
+    <!-- 일정 -->
+    <section class="view" id="v-timeline" hidden>
+      <div class="panel">
+        <div class="panel-head"><h2>진행 중 프로젝트 일정</h2>
+          <div class="legend" id="legend"></div>
+        </div>
+        <div class="tl-wrap"><div class="tl" id="tl"></div></div>
+        <span class="hint">막대 = 1차 시안일 → 완료(납품)일. 1차 일자가 없으면 완료일에 마름모로 표시. 점선은 "9월 중"처럼 날짜가 확정되지 않은 건.</span>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h2>월별 마감</h2></div>
+        <div class="week" id="months"></div>
+      </div>
+    </section>
+
+    <!-- 변경 이력 (편집자) -->
+    <section class="view" id="v-logs" hidden>
+      <div class="panel">
+        <div class="panel-head"><h2>변경 이력</h2><span class="hint">최근 200건 · 누르면 해당 프로젝트가 열립니다</span></div>
+        <div class="list logs" id="logs"></div>
+      </div>
+    </section>
+
+    <!-- 관리 (관리자) -->
+    <section class="view" id="v-admin" hidden>
+      <div class="panel">
+        <div class="panel-head"><h2>공유 링크</h2><span class="hint">이 링크를 받은 사람은 로그인 없이 볼 수 있습니다. 편집자도 같은 링크로 접속합니다.</span></div>
+        <div class="sharebox"><code id="shareUrl"></code><button class="btn" id="copyShare" type="button">복사</button></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>편집자 관리</h2><span class="hint">등록된 구글 계정만 로그인 후 추가·수정·삭제할 수 있습니다</span></div>
+        <div class="tbl-wrap"><table class="tbl"><thead><tr><th>이름</th><th>구글 계정</th><th>권한</th><th>등록</th><th></th></tr></thead><tbody id="editorRows"></tbody></table></div>
+        <form class="addrow" id="addEditor" autocomplete="off">
+          <input id="ae-email" type="email" required placeholder="구글 계정 이메일">
+          <input id="ae-name" type="text" placeholder="이름">
+          <select id="ae-role"><option value="editor">편집자</option><option value="admin">관리자</option></select>
+          <button class="btn primary" type="submit">추가</button>
+        </form>
+        <span class="hint">편집자: 프로젝트 추가·수정·삭제, 제작 금액·변경 이력 열람 · 관리자: 편집자 권한 + 편집자 관리·데이터 가져오기</span>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>데이터</h2></div>
+        <div class="f">
+          <label for="importFile">가져오기 — 구글시트에서 내려받은 CSV, 또는 이 보드의 백업(JSON)</label>
+          <div class="filebox"><input type="file" id="importFile" accept=".csv,.json,text/csv,application/json"><button class="btn" id="importBtn" type="button" disabled>가져오기</button></div>
+          <small id="importInfo">가져오면 현재 보드의 프로젝트가 파일 내용으로 모두 교체됩니다.</small>
+        </div>
+        <div class="f">
+          <label>내보내기 (백업)</label>
+          <div class="filebox"><button class="btn" id="expCsv" type="button">엑셀용 CSV</button><button class="btn" id="expJson" type="button">전체 백업 JSON</button></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-labelledby="dTitle" role="dialog">
+  <div class="d-head"><h3 id="dTitle">프로젝트</h3><button class="x" id="dClose" type="button" aria-label="닫기">×</button></div>
+  <div class="d-body" id="dBody"></div>
+  <div class="d-foot" id="dFoot"></div>
+</aside>
+<div class="toast" id="toast" hidden></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

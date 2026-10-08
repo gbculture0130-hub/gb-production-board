@@ -1,0 +1,22 @@
+{
+  "name": "gb-production-board",
+  "version": "1.0.0",
+  "description": "지비컬쳐 GB 프로덕션 보드 — 프로젝트 현황 웹앱",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "emulators": "firebase emulators:start --only firestore,auth --project demo-gb-board",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-gb-rules \"node --test tests/rules.test.mjs\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^6.0.0",
+    "firebase": "^13.0.0",
+    "firebase-tools": "^15.33.0"
+  },
+  "type": "module"
+}
