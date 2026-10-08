@@ -28,8 +28,8 @@
 1. Firebase 프로젝트 생성 → Firestore(서울, 프로덕션 모드) → Authentication에서 Google 로그인 사용
 2. 웹 앱 등록 후 `firebaseConfig` 값을 `public/config.js`에 입력
 3. Firestore → **규칙** 탭에 `firestore.rules` 내용을 붙여넣고 **게시**
-4. 호스팅 연결 (Cloudflare Pages: 이 저장소 연결, 빌드 명령 없음, 출력 폴더 `public`)
-5. Authentication → 설정 → **승인된 도메인**에 배포 주소 추가 (예: `gb-production-board.pages.dev`)
+4. 호스팅: Cloudflare Workers에 이 저장소 연결 (`wrangler.jsonc` 기준, `public` 폴더만 공개) → 주소 `https://gb-production-board.gbculture12.workers.dev`
+5. Authentication → 설정 → **승인된 도메인**에 `gb-production-board.gbculture12.workers.dev` 추가
 6. 소유자 계정으로 접속 → 로그인 → **새 보드 만들기** → 관리 탭에서 구글시트 CSV 가져오기 → 공유 링크 배포
 
 ## 운영

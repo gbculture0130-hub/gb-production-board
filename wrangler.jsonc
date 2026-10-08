@@ -1,0 +1,8 @@
+// Cloudflare Workers 정적 배포 설정 — public 폴더만 공개됩니다
+{
+  "name": "gb-production-board",
+  "compatibility_date": "2026-10-06",
+  "assets": { "directory": "public" },
+  "workers_dev": true,
+  "preview_urls": false
+}
