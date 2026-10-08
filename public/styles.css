@@ -279,3 +279,8 @@ button.log:hover{background:var(--surface2)}
 .filebox input[type=file]{width:auto;flex:1 1 260px;background:transparent;border:0;padding:6px 0;color:var(--muted)}
 .filebox input[type=url]{flex:1 1 320px;min-width:0;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
 #importInfo.err{color:var(--late)} #importInfo.ok{color:var(--ok)}
+/* 일정 탭 보완 */
+.tl .today::after{white-space:nowrap}
+.tl .trk:not(.hd) .today::after{display:none}
+.tl .bar.out{background:var(--late-soft);border:1px solid var(--late);color:var(--late);font-weight:600;padding:0 8px;width:auto;max-width:60%}
+.tl .cap.late{color:var(--late);font-weight:600}

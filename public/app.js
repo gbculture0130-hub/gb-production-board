@@ -184,7 +184,7 @@ function renderSelects() {
 
 function dueHtml(it) {
   const d = dday(it.done);
-  if (d === null) return '<span class="dd none">' + esc(it.doneText || "미정") + "</span>" + (it.firstText ? '<span class="date">1차 ' + esc(it.firstText) + "</span>" : "");
+  if (d === null) return '<span class="dd none">' + esc(it.doneText || (isActive(it) ? "미정" : "—")) + "</span>" + (it.firstText && isActive(it) ? '<span class="date">1차 ' + esc(it.firstText) + "</span>" : "");
   let cls = "", txt;
   if (!isActive(it)) { txt = md(it.done); cls = "none"; }
   else if (d < 0) { cls = "over"; txt = "D+" + (-d); }
@@ -254,10 +254,14 @@ function renderTeam() {
 function renderTimeline() {
   const act = S.items.filter(isActive).slice().sort(sortDue);
   const t0 = today0();
-  let min = new Date(t0.getFullYear(), t0.getMonth(), 1), max = new Date(t0.getFullYear(), t0.getMonth() + 3, 0);
-  act.forEach(it => { const a = pd(it.first), b = pd(it.done); if (a && a < min) min = new Date(a.getFullYear(), a.getMonth(), 1); if (b && b > max) max = new Date(b.getFullYear(), b.getMonth() + 1, 0); });
-  const back = new Date(t0 - 45 * DAY);
-  if (min > back) min = new Date(back.getFullYear(), back.getMonth(), 1);
+  // 표시 범위: 최근 약 1.5개월 ~ 마지막 마감월 (오래된 1차 일정이 있어도 최대 5개월 전까지만 늘림)
+  const back = new Date(t0 - 45 * DAY), floor = new Date(t0 - 150 * DAY);
+  let min = new Date(back.getFullYear(), back.getMonth(), 1), max = new Date(t0.getFullYear(), t0.getMonth() + 3, 0);
+  act.forEach(it => {
+    const a = pd(it.first), b = pd(it.done);
+    if (a && a < min && a >= floor) min = new Date(a.getFullYear(), a.getMonth(), 1);
+    if (b && b > max) max = new Date(b.getFullYear(), b.getMonth() + 1, 0);
+  });
   const span = (max - min) / DAY + 1;
   const pct = d => ((d - min) / DAY / span * 100);
   const wk = (7 / span * 100) + "%";
@@ -268,11 +272,19 @@ function renderTimeline() {
     const a = pd(it.first), b = pd(it.done); const c = sc(it);
     h += '<div class="lbl"><span class="t">' + esc(it.client) + (it.title ? " · " + esc(it.title) : "") + '</span><span class="s">' + st(it).n + (it.pm ? " · " + esc(it.pm) : "") + (it.program ? " · " + esc(it.program) : "") + "</span></div>";
     h += '<div class="trk" style="--wk:' + wk + '"><span class="today" style="left:' + pct(t0) + '%"></span>';
-    if (b) {
+    const od = dday(it.done);
+    const late = od !== null && od < 0 ? " · D+" + (-od) : "";
+    if (b && b < min) {
+      // 표시 범위보다 훨씬 전에 마감이 지난 건: 왼쪽 끝에 경고 표시
+      h += '<button type="button" class="bar out" data-id="' + esc(it.id) + '" style="--sc:var(--late);left:0">← ' + md(it.done) + " 마감 지남" + late + "</button>";
+    } else if (b) {
       const start = a && a < b ? a : new Date(Math.max(min, b - 21 * DAY));
       const l = Math.max(0, pct(start)), r = Math.min(100, pct(b) + 100 / span);
-      if (a && a < b) h += '<button type="button" class="bar" data-id="' + esc(it.id) + '" style="--sc:' + c + ";left:" + l + "%;width:" + Math.max(1.2, r - l) + '%">' + md(it.first) + " → " + md(it.done) + "</button>";
-      else h += '<button type="button" class="bar pt" data-id="' + esc(it.id) + '" style="--sc:' + c + ";left:" + pct(b) + '%" title="' + md(it.done) + '"></button><span class="cap" style="left:' + Math.min(92, pct(b) + 1.5) + '%">' + md(it.done) + " 납품</span>";
+      if (a && a < b) {
+        h += '<button type="button" class="bar" data-id="' + esc(it.id) + '" style="--sc:' + c + ";left:" + l + "%;width:" + Math.max(1.2, r - l) + '%">' + md(it.first) + " → " + md(it.done) + "</button>";
+        if (late) h += '<span class="cap late" style="left:' + Math.min(88, pct(b) + 100 / span + 0.5) + '%">마감 지남' + late + "</span>";
+      }
+      else h += '<button type="button" class="bar pt" data-id="' + esc(it.id) + '" style="--sc:' + c + ";left:" + pct(b) + '%" title="' + md(it.done) + '"></button><span class="cap' + (late ? " late" : "") + '" style="left:' + Math.min(88, pct(b) + 1.5) + '%">' + md(it.done) + (late ? " 마감" + late : " 납품") + "</span>";
     } else {
       h += '<button type="button" class="bar txt" data-id="' + esc(it.id) + '" style="--sc:' + c + ";left:" + pct(t0) + '%;width:22%">' + esc(it.doneText || it.firstText || "일정 미정") + "</button>";
     }
