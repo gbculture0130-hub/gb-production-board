@@ -320,8 +320,13 @@ function renderAdmin() {
       try { await updateDoc(doc(db, "editors", email), { role: e.target.value }); toast("권한을 변경했습니다"); }
       catch (err) { toast("변경 실패: " + (err.code || err.message)); renderAdmin(); }
     });
-    tr.querySelector('[data-act="del"]').addEventListener("click", async () => {
-      if (!confirm(email + " 계정의 편집 권한을 삭제할까요?")) return;
+    tr.querySelector('[data-act="del"]').addEventListener("click", async e => {
+      const b = e.currentTarget;
+      if (!b.dataset.armed) { // 브라우저 확인창 대신 두 번 눌러 확인
+        b.dataset.armed = "1"; b.textContent = "정말 삭제";
+        setTimeout(() => { delete b.dataset.armed; b.textContent = "삭제"; }, 4000);
+        return;
+      }
       try { await deleteDoc(doc(db, "editors", email)); toast("삭제했습니다"); }
       catch (err) { toast("삭제 실패: " + (err.code || err.message)); }
     });
@@ -786,6 +791,7 @@ function fromJSON(text) {
 let pendingImport = null;
 function importMsg(text, kind) { const el = $("importInfo"); el.textContent = text; el.className = kind || ""; }
 function setPending(data, name) {
+  disarmImport();
   if (!data.projects.length) throw new Error("가져올 프로젝트가 없습니다");
   pendingImport = { data, name };
   const active = data.projects.filter(p => p.status !== "done").length;
@@ -842,11 +848,21 @@ $("importFile").addEventListener("change", async e => {
     setPending(data, file.name);
   } catch (err) { importMsg("파일을 읽지 못했습니다: " + (err.message || err), "err"); }
 });
+function disarmImport() { const b = $("importBtn"); clearTimeout(b._t); delete b.dataset.armed; b.textContent = "가져오기 실행"; b.classList.remove("danger"); }
 $("importBtn").addEventListener("click", async e => {
   if (!pendingImport) return;
   const { data, name } = pendingImport;
-  if (!confirm("현재 보드의 프로젝트 " + S.items.length + "건을 모두 지우고 " + data.projects.length + "건으로 교체합니다. 계속할까요?\n(만약을 위해 먼저 ‘전체 백업 JSON’을 내려받아 두는 것을 권장합니다)")) return;
-  const btn = e.currentTarget; btn.disabled = true;
+  const btn = e.currentTarget;
+  // 기존 데이터가 있으면 한 번 더 눌러 확인 (브라우저 확인창은 일부 환경에서 막힘)
+  if (S.items.length && !btn.dataset.armed) {
+    btn.dataset.armed = "1"; btn.textContent = "교체 확인 — 한 번 더 누르기"; btn.classList.add("danger");
+    importMsg("현재 보드의 " + S.items.length + "건이 지워지고 " + data.projects.length + "건으로 교체됩니다. 계속하려면 버튼을 한 번 더 누르세요. (먼저 ‘전체 백업 JSON’을 받아두면 안전합니다)", "err");
+    btn._t = setTimeout(disarmImport, 10000);
+    return;
+  }
+  disarmImport();
+  btn.disabled = true;
+  importMsg("가져오는 중… 창을 닫지 마세요.");
   try {
     const ops = [];
     S.items.forEach(it => { ops.push(["del", base() + "/projects", it.id]); });

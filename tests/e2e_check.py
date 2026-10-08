@@ -29,7 +29,7 @@ with sync_playwright() as pw:
     oc = br.new_context(viewport={"width": 1366, "height": 900}, locale="ko-KR")
     op = oc.new_page()
     op.on("pageerror", lambda e: errors.append(("owner", str(e))))
-    op.on("dialog", lambda d: d.accept())
+    op.on("dialog", lambda d: (errors.append(("dialog", d.message)), d.dismiss()))
     op.goto(URL)
     expect(op.locator("#gate")).to_contain_text("보드 링크로 접속")
     ok("키 없는 링크는 안내 화면", True)
