@@ -72,7 +72,7 @@
         <div class="panel-head"><h2>팀원별 진행 건수</h2>
           <div class="rolefilter" id="roleSeg">
             <span class="hint">역할</span>
-            <div class="seg"><button type="button" data-v="" aria-pressed="true">전체</button><button type="button" data-v="pm" aria-pressed="false">PM</button><button type="button" data-v="edit" aria-pressed="false">편집</button><button type="button" data-v="td" aria-pressed="false">3D</button><button type="button" data-v="design" aria-pressed="false">디자인</button></div>
+            <div class="seg"><button type="button" data-v="" aria-pressed="true">전체</button><button type="button" data-v="pm" aria-pressed="false">PM</button><button type="button" data-v="writer" aria-pressed="false">구성</button><button type="button" data-v="edit" aria-pressed="false">편집</button><button type="button" data-v="td" aria-pressed="false">3D</button><button type="button" data-v="design" aria-pressed="false">디자인</button><button type="button" data-v="ai" aria-pressed="false">생성형AI</button></div>
           </div>
         </div>
         <div class="people" id="people"></div>
@@ -109,6 +109,16 @@
       <div class="panel">
         <div class="panel-head"><h2>공유 링크</h2><span class="hint">이 링크를 받은 사람은 로그인 없이 볼 수 있습니다. 편집자도 같은 링크로 접속합니다.</span></div>
         <div class="sharebox"><code id="shareUrl"></code><button class="btn" id="copyShare" type="button">복사</button></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>팀원 명단</h2><span class="hint">프로젝트 담당을 지정할 때 이 명단에서 고릅니다. 명단에서 빼도 기존 프로젝트 기록은 그대로 남습니다.</span></div>
+        <div class="chips staff" id="staffChips"></div>
+        <form class="addrow addrow2" id="addStaff" autocomplete="off">
+          <input id="as-name" type="text" placeholder="이름 (여러 명은 쉼표로 구분)">
+          <button class="btn primary" type="submit">추가</button>
+        </form>
+        <span class="hint" id="staffInfo"></span>
       </div>
 
       <div class="panel">

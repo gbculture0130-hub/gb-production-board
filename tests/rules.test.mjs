@@ -123,3 +123,20 @@ test("본인 편집자 문서는 직접 조회 가능 (권한 확인용)", async
   await assertSucceeds(getDoc(doc(as.stranger(), "editors/stranger@gb.kr")));
   await assertFails(getDoc(doc(as.stranger(), "editors/editor@gb.kr")));
 });
+test("담당 역할 확장: 구성·생성형AI, 역할당 여러 명 저장 가능", async () => {
+  const db = as.editor();
+  await assertSucceeds(updateDoc(doc(db, `${B}/projects/p001`), { writer: "민지", ai: "훈민, 건희", pm: "민지, 우진, 규보", technique: "3D, 생성형AI" }));
+  await assertFails(updateDoc(doc(db, `${B}/projects/p001`), { pm: "가".repeat(201) }));
+  await assertFails(updateDoc(doc(as.anon(), `${B}/projects/p001`), { ai: "훈민" }));
+});
+test("팀원 명단: 누구나 보기, 편집자만 수정, 형식 검사", async () => {
+  await env.withSecurityRulesDisabled(async ctx => { await setDoc(doc(ctx.firestore(), `${B}/settings/staff`), { staff: ["민지", "우진"] }); });
+  await assertSucceeds(getDoc(doc(as.anon(), `${B}/settings/staff`)));
+  await assertFails(setDoc(doc(as.anon(), `${B}/settings/staff`), { staff: ["해커"] }));
+  await assertFails(setDoc(doc(as.stranger(), `${B}/settings/staff`), { staff: ["해커"] }));
+  await assertSucceeds(setDoc(doc(as.editor(), `${B}/settings/staff`), { staff: ["민지", "우진", "훈민"], updatedAt: serverTimestamp(), updatedBy: "편집자" }));
+  await assertFails(setDoc(doc(as.editor(), `${B}/settings/staff`), { staff: "민지" }));
+  await assertFails(setDoc(doc(as.editor(), `${B}/settings/staff`), { staff: [], extra: 1 }));
+  await assertFails(setDoc(doc(as.editor(), `${B}/settings/other`), { staff: [] }));
+  await assertFails(deleteDoc(doc(as.editor(), `${B}/settings/staff`)));
+});

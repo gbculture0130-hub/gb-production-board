@@ -24,15 +24,17 @@ const ST = [
   { k: "done", n: "완료", c: "var(--s-done)" }
 ];
 const SI = Object.fromEntries(ST.map((s, i) => [s.k, i]));
-const ROLES = [["pm", "PM"], ["edit", "편집"], ["td", "3D"], ["design", "디자인"]];
-const PUB = ["program", "client", "purpose", "title", "technique", "outsource", "pm", "edit", "td", "design",
+const ROLES = [["pm", "PM"], ["writer", "구성"], ["edit", "편집"], ["td", "3D"], ["design", "디자인"], ["ai", "생성형AI"]];
+const ROLE_KEYS = ROLES.map(r => r[0]);
+const TECH_BASE = ["촬영", "2D", "3D", "생성형AI", "브로슈어", "기타"];
+const PUB = ["program", "client", "purpose", "title", "technique", "outsource", "pm", "writer", "edit", "td", "design", "ai",
   "lang", "narration", "status", "done", "doneText", "first", "firstText", "note"];
 const LANGS = ["국문", "영문", "중문", "일문"];
 const NARR = [["", "미정"], ["성우", "있음 · 성우"], ["AI", "있음 · AI 보이스"], ["없음", "없음"]];
 function narrText(v) { return v === "성우" ? "내레이션 성우" : v === "AI" ? "내레이션 AI" : v === "없음" ? "내레이션 없음" : ""; }
 const LABEL = {
   program: "지원사업", client: "업체명", purpose: "목적", title: "내용", technique: "제작 기법", outsource: "외주",
-  pm: "PM", edit: "편집", td: "3D", design: "디자인", lang: "언어", narration: "내레이션", status: "상태", done: "완료일", doneText: "완료 메모",
+  pm: "PM", writer: "구성", edit: "편집", td: "3D", design: "디자인", ai: "생성형AI", lang: "언어", narration: "내레이션", status: "상태", done: "완료일", doneText: "완료 메모",
   first: "1차 시안일", firstText: "1차 메모", note: "비고"
 };
 const DAY = 86400000;
@@ -83,7 +85,15 @@ function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;
 function st(it) { return ST[SI[it.status] ?? 0]; }
 function sc(it) { return st(it).c; }
 function isActive(it) { return it.status !== "done"; }
-function crewOf(it) { return ROLES.map(([k]) => it[k]).filter(Boolean); }
+function splitNames(s) { return [...new Set(String(s || "").split(/[,/·&+\s]+/).map(x => x.trim()).filter(Boolean))]; }
+function joinNames(a) { return [...new Set(a)].join(", "); }
+function namesOf(it, k) { return splitNames(it[k]); }
+function crewOf(it) { return [...new Set(ROLE_KEYS.flatMap(k => namesOf(it, k)))]; }
+function splitTech(s) { return [...new Set(String(s || "").split(/[,/·]+/).map(x => x.trim()).filter(Boolean))]; }
+function techTags(it) { return splitTech(it.technique).map(t => '<span class="tag' + (t === "생성형AI" ? " ai" : "") + '">' + esc(t) + "</span>").join(""); }
+function koSort(a) { return a.slice().sort((x, y) => x.localeCompare(y, "ko")); }
+// 팀원 명단: 관리 탭에서 저장한 명단, 없으면 데이터에 나온 담당자 전원
+function staffList() { return S.staff && S.staff.length ? S.staff : allNames(); }
 function amt(it) { return isEditor() ? S.amounts[it.id] : null; }
 function tsDate(t) { return t && typeof t.toDate === "function" ? t.toDate() : null; }
 function fmtTs(t) {
@@ -193,13 +203,14 @@ function dueHtml(it) {
   return '<span class="dd ' + cls + '">' + txt + "</span>" + (isActive(it) ? '<span class="date">' + md(it.done) + "</span>" : "");
 }
 function crewHtml(it) {
-  const parts = ROLES.filter(([k]) => it[k]).map(([k, l]) => "<span><b>" + l + "</b>" + esc(it[k]) + "</span>");
+  const parts = ROLES.filter(([k]) => namesOf(it, k).length).map(([k, l]) => "<span><b>" + l + "</b>" + esc(namesOf(it, k).join(", ")) + "</span>");
   if (it.outsource) parts.push("<span><b>외주</b>" + esc(it.outsource) + "</span>");
   return parts.join("") || '<span style="color:var(--faint)">담당 미정</span>';
 }
 function rowHtml(it) {
   const s = st(it), a = amt(it);
-  const tags = [it.program, it.purpose, it.technique, it.lang, narrText(it.narration)].filter(Boolean).map(t => '<span class="tag">' + esc(t) + "</span>").join("");
+  const tags = [it.program, it.purpose].filter(Boolean).map(t => '<span class="tag">' + esc(t) + "</span>").join("") + techTags(it)
+    + [it.lang, narrText(it.narration)].filter(Boolean).map(t => '<span class="tag">' + esc(t) + "</span>").join("");
   const money_ = a && a.amount ? '<span class="mono">' + money(Number(a.amount)) + (a.vat ? ' <span style="color:var(--faint)">VAT' + esc(a.vat) + "</span>" : "") + "</span>" : "";
   return '<button type="button" class="row" data-id="' + esc(it.id) + '" style="--sc:' + s.c + '">'
     + '<span class="stripe"></span>'
@@ -228,7 +239,7 @@ function renderList() {
 function renderTeam() {
   const act = S.items.filter(isActive);
   const stats = {};
-  S.items.forEach(it => ROLES.forEach(([k]) => { const n = it[k]; if (!n) return; stats[n] = stats[n] || { roles: new Set(), active: [], total: 0 }; stats[n].roles.add(k); stats[n].total++; if (isActive(it) && (!S.roleF || k === S.roleF)) stats[n].active.push(it); }));
+  S.items.forEach(it => ROLE_KEYS.forEach(k => namesOf(it, k).forEach(n => { stats[n] = stats[n] || { roles: new Set(), active: [], total: 0 }; stats[n].roles.add(k); stats[n].total++; if (isActive(it) && (!S.roleF || k === S.roleF) && !stats[n].active.includes(it)) stats[n].active.push(it); })));
   const names = Object.keys(stats).filter(n => !S.roleF || stats[n].roles.has(S.roleF)).sort((a, b) => stats[b].active.length - stats[a].active.length || a.localeCompare(b, "ko"));
   if (S.person && !names.includes(S.person)) S.person = "";
   $("people").innerHTML = names.map(n => {
@@ -237,7 +248,7 @@ function renderTeam() {
   }).join("") || '<span class="hint">담당자가 입력된 프로젝트가 없습니다</span>';
   $("people").querySelectorAll(".person").forEach(b => b.addEventListener("click", () => { S.person = S.person === b.dataset.n ? "" : b.dataset.n; renderTeam(); }));
 
-  const mine = (S.person ? act.filter(it => crewOf(it).includes(S.person) && (!S.roleF || it[S.roleF] === S.person)) : act.filter(it => !S.roleF || it[S.roleF])).slice().sort(sortDue);
+  const mine = (S.person ? act.filter(it => crewOf(it).includes(S.person) && (!S.roleF || namesOf(it, S.roleF).includes(S.person))) : act.filter(it => !S.roleF || it[S.roleF])).slice().sort(sortDue);
   const who = S.person || "팀 전체";
   const buckets = [["이번 주", 0, 7], ["다음 주", 7, 14], ["이후 · 미정", 14, 1e9]];
   const t0 = today0(); const dow = (t0.getDay() + 6) % 7; const wkStart = new Date(t0 - dow * DAY);
@@ -319,7 +330,33 @@ function renderLogs() {
 
 /* ───────── 화면: 관리 ───────── */
 function shareUrl() { return location.origin + location.pathname + "#b=" + S.key; }
+function renderStaff() {
+  const box = $("staffChips"); if (!box) return;
+  const list = koSort(staffList());
+  const act = S.items.filter(isActive);
+  const count = n => act.filter(it => crewOf(it).includes(n)).length;
+  box.innerHTML = list.map(n => '<span class="nchip">' + esc(n) + ' <i>' + count(n) + '</i><button type="button" data-n="' + esc(n) + '" aria-label="' + esc(n) + ' 명단에서 빼기">×</button></span>').join("") || '<span class="hint">명단이 비어 있습니다</span>';
+  $("staffInfo").textContent = (S.staff && S.staff.length ? "저장된 명단 " : "아직 저장된 명단이 없어 현재 프로젝트에 나온 담당자를 보여줍니다 · ") + list.length + "명 · 이름 옆 숫자는 진행 중 건수";
+  box.querySelectorAll("button[data-n]").forEach(b => b.addEventListener("click", e => {
+    if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "빼기?"; setTimeout(() => { delete b.dataset.armed; b.textContent = "×"; }, 3000); return; }
+    saveStaff(list.filter(n => n !== b.dataset.n), b.dataset.n + "님을 명단에서 뺐습니다");
+  }));
+}
+async function saveStaff(list, msg) {
+  try {
+    await setDoc(doc(db, base() + "/settings/staff"), { staff: koSort([...new Set(list)]), updatedAt: serverTimestamp(), updatedBy: myName() });
+    toast(msg);
+  } catch (err) { toast("명단 저장 실패: " + (err.code || err.message)); }
+}
+$("addStaff").addEventListener("submit", e => {
+  e.preventDefault();
+  const add = splitNames($("as-name").value); if (!add.length) return;
+  $("as-name").value = "";
+  saveStaff(staffList().concat(add), add.join(", ") + " 추가 완료");
+});
+
 function renderAdmin() {
+  renderStaff();
   $("shareUrl").textContent = shareUrl();
   const rows = [{ email: OWNER, name: "", role: "owner" }].concat(S.editors.filter(e => e.email !== OWNER).sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email, "ko")));
   $("editorRows").innerHTML = rows.map(e => {
@@ -402,11 +439,11 @@ function openDrawer(id) {
   S.drawer = { id, mode: "view" };
   $("dTitle").textContent = it.client || "프로젝트";
   $("dBody").innerHTML = '<div class="d-title">' + esc(it.client) + (it.title ? ' <span style="color:var(--muted);font-weight:500">· ' + esc(it.title) + "</span>" : "") + "</div>"
-    + '<div class="d-sub"><span class="pill" style="--sc:' + s.c + '">' + s.n + "</span>" + [it.program, it.purpose, it.technique].filter(Boolean).map(t => '<span class="tag">' + esc(t) + "</span>").join("") + "</div>"
+    + '<div class="d-sub"><span class="pill" style="--sc:' + s.c + '">' + s.n + "</span>" + [it.program, it.purpose].filter(Boolean).map(t => '<span class="tag">' + esc(t) + "</span>").join("") + techTags(it) + "</div>"
     + '<dl class="kv">'
     + kv("마감(완료)", pd(it.done) ? ('<span class="mono">' + esc(it.done) + "</span> " + dueHtml(it).replace(/<span class="date">.*?<\/span>/, "")) : esc(it.doneText || "미정"))
     + kv("1차", pd(it.first) ? '<span class="mono">' + esc(it.first) + "</span>" : esc(it.firstText || ""))
-    + kv("PM", esc(it.pm)) + kv("편집", esc(it.edit)) + kv("3D", esc(it.td)) + kv("디자인", esc(it.design)) + kv("외주", esc(it.outsource))
+    + ROLES.map(([k, l]) => kv(l, esc(namesOf(it, k).join(", ")))).join("") + kv("외주", esc(it.outsource))
     + kv("언어", esc(it.lang)) + kv("내레이션", esc(NARR.find(n => n[0] === it.narration && n[0])?.[1] || ""))
     + kv("비고", esc(it.note))
     + "</dl>" + (it.updatedAt ? '<div class="meta">최종 수정 ' + esc(fmtTs(it.updatedAt)) + (it.updatedBy ? " · " + esc(it.updatedBy) : "") + "</div>" : "");
@@ -434,6 +471,44 @@ function readLang() {
   return sel.concat(splitLang($("fm-langx").value).filter(x => !sel.includes(x))).join(", ");
 }
 
+function techOptions() {
+  const seen = new Set(TECH_BASE);
+  const extra = koSort([...new Set(S.items.flatMap(i => splitTech(i.technique)))].filter(t => !seen.has(t)));
+  return TECH_BASE.concat(extra);
+}
+function techField(val) {
+  const cur = splitTech(val), opts = techOptions();
+  return '<div class="f"><label>제작 기법</label><div class="chips" id="techChips">' + opts.map(t => '<button type="button" data-l="' + esc(t) + '" aria-pressed="' + cur.includes(t) + '"' + (t === "생성형AI" ? ' class="ai"' : "") + ">" + esc(t) + "</button>").join("")
+    + '<input id="fm-techx" type="text" placeholder="기타 직접 입력" value="' + esc(cur.filter(x => !opts.includes(x)).join(", ")) + '"></div></div>';
+}
+function readTech() {
+  const sel = [...$("techChips").querySelectorAll('button[aria-pressed="true"]')].map(b => b.dataset.l);
+  return sel.concat(splitTech($("fm-techx").value).filter(x => !sel.includes(x))).join(", ");
+}
+// 역할별 담당자 선택: 선택된 사람은 칩, 나머지 전 인력은 목록에서 추가
+function renderRP(k) {
+  const box = document.querySelector("#rp-" + k + " .rp-v"); if (!box || !S.drawer) return;
+  const sel = S.drawer.crew[k];
+  const rest = koSort(staffList().filter(n => !sel.includes(n)));
+  box.innerHTML = sel.map(n => '<span class="nchip">' + esc(n) + '<button type="button" data-n="' + esc(n) + '" aria-label="' + esc(n) + ' 빼기">×</button></span>').join("")
+    + '<select class="rp-add" aria-label="' + esc(ROLES.find(r => r[0] === k)[1]) + ' 담당 추가"><option value="">＋ 추가</option>' + rest.map(n => '<option>' + esc(n) + "</option>").join("") + '<option value="__new">직접 입력…</option></select>';
+  box.querySelectorAll(".nchip button").forEach(b => b.addEventListener("click", () => { S.drawer.crew[k] = sel.filter(n => n !== b.dataset.n); renderRP(k); }));
+  const addSel = box.querySelector(".rp-add");
+  addSel.addEventListener("change", () => {
+    const v = addSel.value;
+    if (v === "__new") {
+      addSel.outerHTML = '<input class="rp-in" type="text" placeholder="이름 입력 후 Enter">';
+      const inp = box.querySelector(".rp-in"); inp.focus();
+      let done = false; // 입력 완료 후 다시 그릴 때 blur가 한 번 더 실행되지 않도록
+      const finish = add => { if (done) return; done = true; if (add.length && S.drawer) S.drawer.crew[k] = [...new Set(sel.concat(add))]; setTimeout(() => renderRP(k), 0); };
+      inp.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); finish(splitNames(inp.value)); } if (e.key === "Escape") { e.stopPropagation(); finish([]); } });
+      inp.addEventListener("blur", () => finish(splitNames(inp.value)));
+      return;
+    }
+    if (v) { S.drawer.crew[k] = sel.concat(v); renderRP(k); }
+  });
+}
+
 // it: 기존 건(수정) 또는 null(신규). preset: 신규 시 미리 채울 값
 function openEditor(it, preset) {
   const isNew = !it;
@@ -441,17 +516,18 @@ function openEditor(it, preset) {
   const a = isNew ? {} : (S.amounts[it.id] || {});
   S.drawer = { id: isNew ? null : it.id, mode: "edit", orig: isNew ? {} : Object.assign({}, it), origAmt: Object.assign({}, a), openedAt: isNew ? null : (tsDate(it.updatedAt)?.getTime() || 0), status: v.status || "todo" };
   $("dTitle").textContent = isNew ? "새 프로젝트" : (it.client || "프로젝트");
-  const names = allNames();
+  S.drawer.crew = Object.fromEntries(ROLE_KEYS.map(k => [k, namesOf(v, k)]));
   $("dBody").innerHTML = '<div id="dWarn"></div>'
-    + dl("dl-names", names) + dl("dl-prog", uniq("program")) + dl("dl-purpose", uniq("purpose")) + dl("dl-tech", uniq("technique")) + dl("dl-client", uniq("client"))
+    + dl("dl-prog", uniq("program")) + dl("dl-purpose", uniq("purpose")) + dl("dl-client", uniq("client"))
     + '<div class="f"><label>상태</label><div class="stpick" id="stpick">' + ST.map(s => '<button type="button" data-k="' + s.k + '" style="--sc:' + s.c + '" aria-pressed="' + (s.k === (v.status || "todo")) + '">' + s.n + "</button>").join("") + "</div></div>"
     + '<div class="f2">' + fld("client", "업체명", v.client, { req: true, list: "dl-client" }) + fld("title", "내용", v.title, { ph: "예: 기업 홍보영상" }) + "</div>"
     + '<div class="f2">' + fld("program", "지원사업", v.program, { list: "dl-prog" }) + fld("purpose", "목적", v.purpose, { list: "dl-purpose" }) + "</div>"
-    + '<div class="f2">' + fld("technique", "제작 기법", v.technique, { list: "dl-tech" }) + fld("outsource", "외주", v.outsource) + "</div>"
+    + techField(v.technique)
     + langField(v.lang)
-    + '<div class="f"><label for="fm-narration">내레이션</label><select id="fm-narration">' + NARR.map(([k, l]) => '<option value="' + k + '"' + ((v.narration || "") === k ? " selected" : "") + ">" + l + "</option>").join("") + "</select></div>"
-    + '<div class="d-sec">담당</div>'
-    + '<div class="f4">' + fld("pm", "PM", v.pm, { list: "dl-names" }) + fld("edit", "편집", v.edit, { list: "dl-names" }) + fld("td", "3D", v.td, { list: "dl-names" }) + fld("design", "디자인", v.design, { list: "dl-names" }) + "</div>"
+    + '<div class="f2"><div class="f"><label for="fm-narration">내레이션</label><select id="fm-narration">' + NARR.map(([k, l]) => '<option value="' + k + '"' + ((v.narration || "") === k ? " selected" : "") + ">" + l + "</option>").join("") + "</select></div>"
+    + fld("outsource", "외주", v.outsource) + "</div>"
+    + '<div class="d-sec">담당 <span class="lock">· 전체 팀원에서 선택, 역할마다 여러 명 가능</span></div>'
+    + '<div class="rps">' + ROLES.map(([k, l]) => '<div class="rp" id="rp-' + k + '"><span class="rp-l">' + l + '</span><div class="rp-v"></div></div>').join("") + "</div>"
     + '<div class="d-sec">일정</div>'
     + '<div class="f"><label for="fm-first">1차 시안일</label><div class="pair"><input id="fm-first" type="date" value="' + esc(pd(v.first) ? v.first : "") + '"><input id="fm-firstText" type="text" placeholder="날짜 미정 시 메모 (예: 9월 중)" value="' + esc(v.firstText || "") + '"></div></div>'
     + '<div class="f"><label for="fm-done">완료(납품)일</label><div class="pair"><input id="fm-done" type="date" value="' + esc(pd(v.done) ? v.done : "") + '"><input id="fm-doneText" type="text" placeholder="날짜 미정 시 메모 (예: 10월 말)" value="' + esc(v.doneText || "") + '"></div></div>'
@@ -462,7 +538,8 @@ function openEditor(it, preset) {
     + '<div class="f"><label for="fm-note">비고</label><textarea id="fm-note" rows="3">' + esc(v.note || "") + "</textarea></div>"
     + (isNew ? "" : '<div class="meta">' + (it.updatedAt ? "최종 수정 " + esc(fmtTs(it.updatedAt)) + (it.updatedBy ? " · " + esc(it.updatedBy) : "") : "") + "</div>")
     + '<div id="fmErr" class="notice err" hidden></div>';
-  $("langChips").querySelectorAll("button").forEach(b => b.addEventListener("click", () => b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") === "true" ? "false" : "true")));
+  ["langChips", "techChips"].forEach(id => $(id).querySelectorAll("button").forEach(b => b.addEventListener("click", () => b.setAttribute("aria-pressed", b.getAttribute("aria-pressed") === "true" ? "false" : "true"))));
+  ROLE_KEYS.forEach(renderRP);
   $("stpick").querySelectorAll("button").forEach(b => b.addEventListener("click", () => {
     S.drawer.status = b.dataset.k;
     $("stpick").querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b ? "true" : "false"));
@@ -475,7 +552,7 @@ function openEditor(it, preset) {
   f.querySelector('[data-act="save"]').addEventListener("click", e => saveProject(e.currentTarget));
   if (!isNew) {
     f.querySelector('[data-act="del"]').addEventListener("click", () => askDelete(it));
-    f.querySelector('[data-act="dup"]').addEventListener("click", () => openEditor(null, { client: it.client, program: it.program, purpose: it.purpose, pm: it.pm }));
+    f.querySelector('[data-act="dup"]').addEventListener("click", () => openEditor(null, { client: it.client, program: it.program, purpose: it.purpose, pm: it.pm, writer: it.writer }));
   }
   showDrawer();
   if (isNew) setTimeout(() => $("fm-" + (v.client ? "title" : "client")).focus(), 40);
@@ -502,7 +579,10 @@ function labelOf(p) { return (p.client || "") + (p.title ? " · " + p.title : ""
 function readForm() {
   const g = id => ($("fm-" + id).value || "").trim();
   const v = {};
-  PUB.forEach(k => { if (!["status", "note", "lang", "narration"].includes(k)) v[k] = g(k); });
+  PUB.forEach(k => { if (!["status", "note", "lang", "narration", "technique"].includes(k) && !ROLE_KEYS.includes(k)) v[k] = g(k); });
+  document.querySelectorAll("#dBody .rp-in").forEach(inp => { const k = inp.closest(".rp").id.slice(3); S.drawer.crew[k] = [...new Set(S.drawer.crew[k].concat(splitNames(inp.value)))]; });
+  ROLE_KEYS.forEach(k => v[k] = joinNames(S.drawer.crew[k]));
+  v.technique = readTech();
   v.status = S.drawer.status || "todo";
   v.lang = readLang();
   v.narration = $("fm-narration").value;
@@ -542,18 +622,22 @@ async function saveProject(btn) {
   const b = writeBatch(db);
   if (isNew) {
     const order = S.items.reduce((m, x) => Math.max(m, Number(x.order) || 0), 0) + 1;
-    b.set(pref, Object.assign({}, pub, { order, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), updatedBy: by }));
+    const body = {}; Object.entries(pub).forEach(([k, val]) => { if (val !== "" || k === "client") body[k] = val; });
+    b.set(pref, Object.assign(body, { order, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), updatedBy: by }));
   } else {
     const upd = {}; changed.forEach(k => upd[k] = pub[k]);
     upd.updatedAt = serverTimestamp(); upd.updatedBy = by;
     b.update(pref, upd);
   }
+  const roster = staffList();
+  const newcomers = crewOf(pub).filter(n => !roster.includes(n));
+  if (newcomers.length) b.set(doc(db, base() + "/settings/staff"), { staff: koSort([...new Set(roster.concat(newcomers))]), updatedAt: serverTimestamp(), updatedBy: by });
   if (amtChanged) {
     const aref = doc(db, base() + "/amounts", id);
     if (na.amount === null && !na.vat && !na.memo) b.delete(aref); else b.set(aref, na);
   }
   const changes = isNew ? ["신규 등록 · " + st(pub).n] : changed.map(k => {
-    if (["status", "done", "first", "pm", "edit", "td", "design", "lang", "narration"].includes(k)) return LABEL[k] + " " + short(k, orig[k]) + " → " + short(k, pub[k]);
+    if (["status", "done", "first", "technique", "lang", "narration", ...ROLE_KEYS].includes(k)) return LABEL[k] + " " + short(k, orig[k]) + " → " + short(k, pub[k]);
     return LABEL[k] + " 수정";
   });
   if (amtChanged && !isNew) changes.push("제작 금액 수정");
@@ -686,7 +770,7 @@ async function createBoard(e) {
   } catch (err) { toast("만들기 실패: " + (err.code || err.message)); e.currentTarget.disabled = false; }
 }
 
-function stopBoard() { ["meta", "projects"].forEach(k => { if (S.unsub[k]) { S.unsub[k](); S.unsub[k] = null; } }); stopPrivate(); S.items = []; S.loaded = false; S.meta = undefined; }
+function stopBoard() { ["meta", "projects", "staff"].forEach(k => { if (S.unsub[k]) { S.unsub[k](); S.unsub[k] = null; } }); stopPrivate(); S.items = []; S.loaded = false; S.meta = undefined; }
 function startBoard() {
   stopBoard();
   S.key = readKey();
@@ -702,6 +786,10 @@ function startBoard() {
     $("rec").classList.remove("off");
     render(); checkDrawerConflict();
   }, err => { $("rec").classList.add("off"); notice("데이터를 불러오지 못했습니다 (" + err.code + "). 새로고침해 보세요.", true); });
+  S.unsub.staff = onSnapshot(doc(db, base() + "/settings/staff"), s => {
+    S.staff = s.exists() && Array.isArray(s.data().staff) ? s.data().staff.filter(x => typeof x === "string") : null;
+    if (S.tab === "admin") renderStaff();
+  }, () => { S.staff = null; });
   startPrivate();
   renderGate(); renderAuth();
 }
@@ -753,7 +841,7 @@ function fromSheetCSV(text) {
   if (rows.length < 2) throw new Error("시트에 프로젝트 데이터가 없습니다");
   const head = rows[0].map(h => (h || "").trim());
   const col = (...keys) => { for (const k of keys) { const i = head.indexOf(k); if (i >= 0) return i; } return -1; };
-  const C = { program: col("지원사업명", "지원사업"), client: col("업체명"), purpose: col("목적"), title: col("내용"), technique: col("제작 기법", "제작기법"), outsource: col("외주"), pm: col("PM"), edit: col("편집"), td: col("3D"), design: col("디자인"), lang: col("언어"), narration: col("내레이션", "나레이션"), status: col("상태"), done: col("완료", "완료일"), first: col("1차", "1차 시안일"), note: col("비고"), amount: col("제작 금액", "제작금액") };
+  const C = { program: col("지원사업명", "지원사업"), client: col("업체명"), purpose: col("목적"), title: col("내용"), technique: col("제작 기법", "제작기법"), outsource: col("외주"), pm: col("PM"), edit: col("편집"), td: col("3D"), design: col("디자인"), writer: col("구성", "구성작가"), ai: col("생성형AI", "생성형 AI", "AI"), lang: col("언어"), narration: col("내레이션", "나레이션"), status: col("상태"), done: col("완료", "완료일"), first: col("1차", "1차 시안일"), note: col("비고"), amount: col("제작 금액", "제작금액") };
   if (C.client < 0) throw new Error("‘업체명’ 열을 찾을 수 없습니다. 구글시트 원본 CSV인지 확인하세요.");
   const projects = [], amounts = {};
   let pc = "", pp = "";
@@ -771,7 +859,7 @@ function fromSheetCSV(text) {
     let note = g("note");
     if (!status) { status = "plan"; note = (note ? note + " " : "") + "(시트 상태: " + sraw + ")"; }
     const id = "p" + String(i + 1).padStart(3, "0");
-    projects.push({ id, order: i + 2, program, client, purpose: g("purpose"), title: g("title"), technique: g("technique"), outsource: g("outsource"), pm: g("pm"), edit: g("edit"), td: g("td"), design: g("design"), lang: splitLang(g("lang")).join(", "), narration: narrFrom(g("narration")), status, done, doneText, first, firstText, note });
+    projects.push({ id, order: i + 2, program, client, purpose: g("purpose"), title: g("title"), technique: g("technique"), outsource: g("outsource"), pm: joinNames(splitNames(g("pm"))), writer: joinNames(splitNames(g("writer"))), edit: joinNames(splitNames(g("edit"))), td: joinNames(splitNames(g("td"))), design: joinNames(splitNames(g("design"))), ai: joinNames(splitNames(g("ai"))), lang: splitLang(g("lang")).join(", "), narration: narrFrom(g("narration")), status, done, doneText, first, firstText, note });
     const a = parseAmount(g("amount")); if (a && (a.amount != null || a.memo)) amounts[id] = a;
   });
   return { projects, amounts };
@@ -912,11 +1000,11 @@ function download(name, text, type) {
 function stamp() { const d = new Date(); const p = n => String(n).padStart(2, "0"); return d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + "_" + p(d.getHours()) + p(d.getMinutes()); }
 function csvCell(v) { v = String(v ?? ""); return /[",\n\r]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
 $("expCsv").addEventListener("click", () => {
-  const head = ["지원사업명", "업체명", "목적", "내용", "제작 기법", "외주", "PM", "편집", "3D", "디자인", "언어", "내레이션", "상태", "완료", "1차", "비고", "제작 금액"];
+  const head = ["지원사업명", "업체명", "목적", "내용", "제작 기법", "외주", "PM", "구성", "편집", "3D", "디자인", "생성형AI", "언어", "내레이션", "상태", "완료", "1차", "비고", "제작 금액"];
   const rows = S.items.slice().sort((a, b) => (a.order || 0) - (b.order || 0)).map(p => {
     const a = S.amounts[p.id];
     const am = a ? (a.amount != null ? canonAmt(a.amount, a.vat) + (a.memo ? " / " + a.memo : "") : a.memo) : "";
-    return [p.program, p.client, p.purpose, p.title, p.technique, p.outsource, p.pm, p.edit, p.td, p.design, p.lang, p.narration === "AI" ? "AI 보이스" : p.narration, p.status === "todo" ? "" : st(p).n, p.done || p.doneText, p.first || p.firstText, p.note, am];
+    return [p.program, p.client, p.purpose, p.title, p.technique, p.outsource, p.pm, p.writer, p.edit, p.td, p.design, p.ai, p.lang, p.narration === "AI" ? "AI 보이스" : p.narration, p.status === "todo" ? "" : st(p).n, p.done || p.doneText, p.first || p.firstText, p.note, am];
   });
   download("GB프로덕션보드_" + stamp() + ".csv", "﻿" + [head].concat(rows).map(r => r.map(csvCell).join(",")).join("\r\n"), "text/csv;charset=utf-8");
 });

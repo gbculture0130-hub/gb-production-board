@@ -26,14 +26,15 @@ service cloud.firestore {
     function validProject() {
       let d = request.resource.data;
       return d.keys().hasOnly(['order', 'program', 'client', 'purpose', 'title', 'technique', 'outsource',
-                               'pm', 'edit', 'td', 'design', 'lang', 'narration',
+                               'pm', 'writer', 'edit', 'td', 'design', 'ai', 'lang', 'narration',
                                'status', 'done', 'doneText', 'first', 'firstText',
                                'note', 'createdAt', 'updatedAt', 'updatedBy'])
         && d.client is string && d.client.size() > 0 && d.client.size() <= 200
         && d.status in ['todo', 'plan', 'shoot', 'prod', 'edit', 'revise', 'review', 'hold', 'done']
         && str(d, 'title', 300) && str(d, 'program', 100) && str(d, 'purpose', 100)
         && str(d, 'technique', 200) && str(d, 'outsource', 200)
-        && str(d, 'pm', 60) && str(d, 'edit', 60) && str(d, 'td', 60) && str(d, 'design', 60)
+        && str(d, 'pm', 200) && str(d, 'writer', 200) && str(d, 'edit', 200)
+        && str(d, 'td', 200) && str(d, 'design', 200) && str(d, 'ai', 200)
         && str(d, 'done', 10) && str(d, 'doneText', 100) && str(d, 'first', 10) && str(d, 'firstText', 100)
         && str(d, 'lang', 100)
         && (!('narration' in d) || d.narration in ['', '성우', 'AI', '없음'])
@@ -74,6 +75,13 @@ service cloud.firestore {
         allow read: if isEditor();
         allow create, update: if isEditor() && validAmount();
         allow delete: if isEditor();
+      }
+      // 팀원 명단 (담당자 선택 목록) — 누구나 보기, 편집자만 수정
+      match /settings/{name} {
+        allow read: if true;
+        allow write: if isEditor() && name == 'staff'
+          && request.resource.data.keys().hasOnly(['staff', 'updatedAt', 'updatedBy'])
+          && request.resource.data.staff is list && request.resource.data.staff.size() <= 300;
       }
       match /logs/{id} {
         allow read: if isEditor();

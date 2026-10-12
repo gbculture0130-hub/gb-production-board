@@ -28,12 +28,14 @@
 1. Firebase 프로젝트 생성 → Firestore(서울, 프로덕션 모드) → Authentication에서 Google 로그인 사용
 2. 웹 앱 등록 후 `firebaseConfig` 값을 `public/config.js`에 입력
 3. Firestore → **규칙** 탭에 `firestore.rules` 내용을 붙여넣고 **게시**
-4. 호스팅: Cloudflare Workers에 이 저장소 연결 (`wrangler.jsonc` 기준, `public` 폴더만 공개) → 주소 `https://gb-production-board.gbculture12.workers.dev`
+4. 호스팅: Cloudflare Workers Builds에 이 저장소 연결 → `public` 폴더 자동 감지 배포 → 주소 `https://gb-production-board.gbculture12.workers.dev`
+   - ⚠️ 저장소에 `wrangler.jsonc` 등 배포 설정 파일을 추가하지 마세요. 추가했을 때 Cloudflare 빌드가 계속 실패했습니다(2026-10-08~12).
 5. Authentication → 설정 → **승인된 도메인**에 `gb-production-board.gbculture12.workers.dev` 추가
 6. 소유자 계정으로 접속 → 로그인 → **새 보드 만들기** → 관리 탭에서 구글시트 CSV 가져오기 → 공유 링크 배포
 
 ## 운영
 
+- **팀원 명단**: 관리 탭 → 팀원 명단. 프로젝트 담당(PM·구성·편집·3D·디자인·생성형AI) 선택 목록이 이 명단입니다. 역할마다 여러 명 지정 가능, 담당 지정 중 ‘직접 입력’한 새 이름은 명단에 자동 추가.
 - **편집자 추가**: 관리 탭 → 구글 계정 이메일·이름 입력 → 추가. 삭제하면 즉시 편집 불가.
 - **백업**: 관리 탭 → 전체 백업 JSON (월 1회 권장). 엑셀이 필요하면 엑셀용 CSV.
 - **링크 교체** (링크가 외부로 샌 경우): 백업 JSON 저장 → 주소에서 `#b=…` 지우고 접속 → 새 보드 만들기 → 백업 가져오기 → 새 링크 재공유.
